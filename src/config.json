@@ -9,7 +9,7 @@
     "max_work": 1000,
     "topic": "test1",
     "route": {
-      "modules":"Index",
+      "module":"Index",
       "controller":"Index",
       "action":"Index"
     }
@@ -24,7 +24,7 @@
     "max_work": 100,
     "topic": "test2",
     "route": {
-      "modules":"Admin",
+      "module":"Admin",
       "controller":"Index",
       "action":"Index"
     }

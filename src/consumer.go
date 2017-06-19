@@ -13,29 +13,28 @@ import (
 	"strings"
 	"path/filepath"
 	"github.com/garyburd/redigo/redis"
+	"time"
 )
 
 type config struct {
-	mq	 string
-	method	 string
-	host     string
-	port     int
-	db       int
-	auth     string
-	max_work int
-	topic	 string
-	route	 route
+	Mq	 string `json:"mq"`
+	Method	 string `json:"method"`
+	Host     string `json:"host"`
+	Port     int `json:"port"`
+	Db       int `json:"db"`
+	Auth     string `json:"auth"`
+	Max_work int `json:"max_work"`
+	Topic	 string `json:"topic"`
+	Route	 route `json:"route"`
 }
 
 type route struct {
-	modules string
-	controller string
-	action string
+	Module string `json:"module"`
+	Controller string `json:"controller"`
+	Action string `json:"action"`
 }
 
-var configs map[string]config
 var wg sync.WaitGroup
-var sign_chans map[string]chan int
 
 func main() {
 	//使用上多核
@@ -48,69 +47,100 @@ func main() {
 	//读取配置
 	config_bytes, err := ioutil.ReadFile("config.json")
 	if err != nil {
-		log.Fatal("config file not exist",err.Error())
+		log.Fatal("config file not exist err:",err.Error())
 	}
-	configs = make(map[string]config)
+	var configs map[string]config
 	err = json.Unmarshal(config_bytes, &configs)
 	if err != nil {
-		log.Fatal("json decoding faild", err.Error())
+		log.Fatal("json decoding faild err:", err.Error())
 	}
 
-	//针对每个topic，开协程处理
+	//todo 检查fastcgi服务是否开启
+
+	//每个topic协程需要接受主进程停止信号
+	var sign_consumers map[string]chan int
+	//每个topic协程数据暂存区
+	var data_consumers map[string]chan string
+
 	for name,value := range configs {
-		go consumer(name, value)
+		go getData(name, value, sign_consumers[name], data_consumers[name])
+	}
+
+	//发送给fpm处理数据
+	for name,value := range configs {
+		go consumer(name, value, data_consumers[name])
 	}
 
 	//主进程不退出，直到收到信号退出，同时通知协程停止获取数据，处理完积压数据
 	for {
 		select {
-			case <-sigs:
-				for _,consumer_chan := range sign_chans {
-					consumer_chan <- 0
-				}
-				break
+		case <-sigs:
+			for _,consumer_chan := range sign_consumers {
+				consumer_chan <- 0
+			}
+			break
 		}
 	}
 
 	//等待协程完成,退出
 	wg.Wait()
-	log.Panicln("exit");
+	log.Panicln("safe exit");
 }
 
-//获取消息队列数据，协程发送请求给fastcgi，获得返回结果
-func consumer(name string, config config){
-	//从队列获取的数据暂存在channel里,最大100，满了就阻塞
-	queue := make(chan string, 100)
-	//设置最大的请求并发量
-	work_num := make(chan int, config.max_work)
+//获取消息队列数据，以channel方式返回
+func getData(name string, config config, sign_consumer chan int, data_consumer chan string){
+	wg.Add(1)
+	defer wg.Done()
 	//获取数据
-	if(config.mq == "redis" && config.method == "pop"){
-		//链接mq
-		conn,_ := connectRedis(config.host, config.port, config.auth, config.db)
+	log.Println(config.Mq, config.Method)
+	if(config.Mq == "redis" && config.Method == "pop"){
+		//链接redis todo db&auth
+		conn, err := redis.Dial("tcp", config.Host+":"+string(config.Port))
+		if err != nil {
+			log.Fatal("mq "+name+" connect err",err.Error())
+		}
+		defer conn.Close()
+
 		//获取数据
 		for {
 			select {
-				case <- sign_chans[name]:
-					break
-				default:
-					for {
-						data, _ := redis.Bytes(conn.Do("POP", config.topic))
-						queue <- string(data)
+			case <- sign_consumer:
+				break
+			default:
+				for {
+					data, err := redis.Bytes(conn.Do("POP", config.Topic))
+					if err != nil {
+						log.Println("pop err",err.Error())
+						time.Sleep(1)
+						continue
 					}
+					if data == nil {
+						log.Println("pop nil data")
+						time.Sleep(1)
+						continue
+					}
+					data_consumer <- string(data)
+				}
 			}
 		}
-	}else{
-
+	} else {
+		log.Println("now not support mq and method ", config.Mq, config.Method)
 	}
+}
+
+func consumer(name string, config config, data_consumer chan string){
+	wg.Add(1)
+	defer wg.Done()
+	//设置最大的请求并发量
+	work_num := make(chan int, config.Max_work)
 	//并发调用fastcgi，控制并发量
 	for{
 		select {
-		case <- queue:
-			data := <-queue
-			go send(config.route, data, work_num)
+		case <- data_consumer:
+			data := <-data_consumer
+			go send(config.Route, data, work_num)
 		}
 	}
-
 }
 
 //通过fastcgi发送数据给fpm
@@ -122,7 +152,7 @@ func send(route route, data string, work_num chan int) {
 	env := make(map[string]string)
 	env["REQUEST_METHOD"] = "POST"
 	env["SCRIPT_FILENAME"] = getParentDirectory(getCurrentDirectory())+"/public/consumer.php"
-	env["REQUEST_URI"] = "/"+route.modules+"/"+route.controller+"/"+route.action
+	env["REQUEST_URI"] = "/"+route.Module+"/"+route.Controller+"/"+route.Action
 	env["SERVER_SOFTWARE"] = "go / fastcgiclient "
 	env["REMOTE_ADDR"] = "127.0.0.1"
 	env["SERVER_PROTOCOL"] = "HTTP/1.1"
