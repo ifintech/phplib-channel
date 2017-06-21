@@ -6,7 +6,7 @@
     "port": 6379,
     "db": 0,
     "auth": "password",
-    "max_work": 1000,
+    "max_work": 10,
     "topic": "test1",
     "route": {
       "module":"Index",

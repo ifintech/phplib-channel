@@ -84,7 +84,7 @@ func main() {
 
 	//等待协程完成,退出
 	wg.Wait()
-	log.Panicln("safe exit");
+	log.Println("safe exit");
 }
 
 //获取消息队列数据，以channel方式返回
