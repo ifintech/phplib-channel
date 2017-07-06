@@ -1,0 +1,32 @@
+{
+  "consumer1": {
+    "mq":"redis",
+    "method":"lpop",
+    "host": "127.0.0.1",
+    "port": 6379,
+    "db": 0,
+    "auth": "password",
+    "max_work": 16,
+    "topic": "test1",
+    "route": {
+      "module":"Index",
+      "controller":"Consumer/Demo",
+      "action":"doSth"
+    }
+  },
+  "consumer2": {
+    "mq": "redis",
+    "method":"sub",
+    "host": "127.0.0.1",
+    "port": 6379,
+    "db": 0,
+    "auth": "password",
+    "max_work": 100,
+    "topic": "test2",
+    "route": {
+      "module":"Admin",
+      "controller":"Index",
+      "action":"Index"
+    }
+  }
+}
