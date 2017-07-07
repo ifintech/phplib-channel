@@ -65,7 +65,7 @@ func main() {
 	for name, config := range configs {
 		consumer_signs[name] = make(chan int, 1)
 
-		go getData(name, config, consumer_signs[name])
+		go consume(name, config, consumer_signs[name])
 	}
 
 	Loop:
@@ -87,7 +87,7 @@ func main() {
 }
 
 //获取消息队列数据，以channel方式返回
-func getData(name string, config config, sign_consumer <- chan int){
+func consume(name string, config config, sign_consumer <- chan int){
 	wg.Add(1)
 	defer wg.Done()
 
@@ -127,7 +127,7 @@ func getData(name string, config config, sign_consumer <- chan int){
 
 				log.Println(name + " get data: ", string(data))
 
-				go send(config.Route, string(data), work_num)
+				go requestFpm(config.Route, string(data), work_num)
 			}
 		}
 	} else {
@@ -136,7 +136,7 @@ func getData(name string, config config, sign_consumer <- chan int){
 }
 
 //通过fastcgi发送数据给fpm
-func send(route route, data string, work_num <-chan int) {
+func requestFpm(route route, data string, work_num <-chan int) {
 	defer func() {
 		consumer_wg.Done()
 		<- work_num
@@ -206,7 +206,7 @@ func connectRedis(host string, port string, auth string, db int) (redis.Conn, er
 	return conn, err
 }
 
-func substr(s string, pos, length int) string {
+func subStr(s string, pos, length int) string {
 	runes := []rune(s)
 	l := pos + length
 	if l > len(runes) {
@@ -216,7 +216,7 @@ func substr(s string, pos, length int) string {
 }
 
 func getParentDirectory(dirctory string) string {
-	return substr(dirctory, 0, strings.LastIndex(dirctory, "/"))
+	return subStr(dirctory, 0, strings.LastIndex(dirctory, "/"))
 }
 
 func getCurrentDirectory() string {
