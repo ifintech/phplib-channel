@@ -161,7 +161,7 @@ func requestFpm(route route, data string, work_num <-chan int) {
 
 	fcgi, err := fcgiclient.New("127.0.0.1", 9000)
 	if err != nil {
-		log.Println("fastcgi connect err ", err)
+		log.Println("fastcgi connect err: ", err)
 		return
 
 	}
@@ -169,7 +169,7 @@ func requestFpm(route route, data string, work_num <-chan int) {
 
 	resp, err := fcgi.Get(env)
 	if err != nil {
-		log.Println("fastcgi response err ", err)
+		log.Println("fastcgi response err: ", err)
 		return
 	}
 
@@ -178,7 +178,7 @@ func requestFpm(route route, data string, work_num <-chan int) {
 		log.Println("err:", err)
 		return
 	}
-	log.Println(string(content))
+	log.Println("response msg: " , string(content))
 
 	return
 }
