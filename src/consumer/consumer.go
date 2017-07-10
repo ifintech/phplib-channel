@@ -60,21 +60,23 @@ func main() {
 	//todo 检查fastcgi服务是否开启
 
 	//每个topic协程需要接受主进程停止信号
-	var consumer_signs = make(map[string] (chan int))
+	var consumer_sig_chans = make(map[string](chan os.Signal))
 
 	for name, config := range configs {
-		consumer_signs[name] = make(chan int, 1)
+		consumer_sig_chans[name] = make(chan os.Signal, 1)
 
-		go consume(name, config, consumer_signs[name])
+		go consume(name, config, consumer_sig_chans[name])
 	}
 
 	Loop:
 	//主进程不退出，直到收到信号退出，同时通知协程停止获取数据，处理完积压数据
 	for {
 		select {
-		case <-sigs:
-			for _, sign := range consumer_signs {
-				sign <- 0
+		case sig := <-sigs:
+			log.Println("master receive receive signal " + sig.String())
+
+			for _, sig_chan := range consumer_sig_chans {
+				sig_chan <- sig
 			}
 
 			break Loop
@@ -87,7 +89,7 @@ func main() {
 }
 
 //获取消息队列数据，以channel方式返回
-func consume(name string, config config, sign_consumer <- chan int){
+func consume(name string, config config, sig_chan <-chan os.Signal){
 	wg.Add(1)
 	defer wg.Done()
 
@@ -106,7 +108,8 @@ func consume(name string, config config, sign_consumer <- chan int){
 		Loop:
 		for {
 			select {
-			case <- sign_consumer:
+			case sig := <-sig_chan:
+				log.Println("consumer " + name + " receive signal " + sig.String())
 				consumer_wg.Wait()
 				log.Println("break consumer: " + name)
 
@@ -120,7 +123,7 @@ func consume(name string, config config, sign_consumer <- chan int){
 					consumer_wg.Done()
 					<-work_num
 
-					log.Println("pop err: ", err.Error())
+					log.Println(name + " pop err: ", err.Error())
 					time.Sleep(time.Second * 1)
 					continue
 				}
