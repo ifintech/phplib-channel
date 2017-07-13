@@ -15,6 +15,7 @@ import (
 	"github.com/garyburd/redigo/redis"
 	"time"
 	"fmt"
+	"os/exec"
 )
 
 type config struct {
@@ -35,7 +36,9 @@ type route struct {
 	Action string `json:"action"`
 }
 
-var wg sync.WaitGroup
+const MQ_METHOD_POP = "pop"
+const MQ_METHOD_SUB = "sub"
+
 var consumer_wg sync.WaitGroup
 
 func main() {
@@ -57,7 +60,13 @@ func main() {
 		log.Fatal("json decoding faild err:", err.Error())
 	}
 
-	//todo 检查fastcgi服务是否开启
+	//检查fastcgi服务是否开启
+	cmd := "netstat -an | grep 9000"
+	err = exec.Command("bash","-c", cmd).Run()
+	if err != nil {
+		log.Fatal("fastcgi服务未启动")
+		return
+	}
 
 	//每个topic协程需要接受主进程停止信号
 	var consumer_sig_chans = make(map[string](chan os.Signal))
@@ -84,20 +93,23 @@ func main() {
 	}
 
 	//等待协程完成,退出
-	wg.Wait()
+	consumer_wg.Wait()
 	log.Println("safe exit");
 }
 
 //获取消息队列数据，以channel方式返回
 func consume(name string, config config, sig_chan <-chan os.Signal){
-	wg.Add(1)
-	defer wg.Done()
+	consumer_wg.Add(1)
+	defer consumer_wg.Done()
+
+	var task_wg sync.WaitGroup
 
 	//设置最大的请求并发量
 	work_num := make(chan int, config.Max_work)
 
 	log.Println(config.Mq, config.Method)
-	if(config.Mq == "redis" && config.Method == "lpop"){
+
+	if(config.Mq == "redis" && MQ_METHOD_POP == config.Method){
 		//链接redis todo db&auth
 		conn, err := redis.Dial("tcp", config.Host+":"+fmt.Sprint(config.Port))
 		if err != nil {
@@ -110,17 +122,17 @@ func consume(name string, config config, sig_chan <-chan os.Signal){
 			select {
 			case sig := <-sig_chan:
 				log.Println("consumer " + name + " receive signal " + sig.String())
-				consumer_wg.Wait()
+				task_wg.Wait()
 				log.Println("break consumer: " + name)
 
 				break Loop
 			default:
-				consumer_wg.Add(1)
+				task_wg.Add(1)
 				work_num <- 1
 
-				data, err := redis.Bytes(conn.Do(config.Method, config.Topic))
+				data, err := redis.Bytes(conn.Do("lpop", config.Topic))
 				if err != nil {
-					consumer_wg.Done()
+					task_wg.Done()
 					<-work_num
 
 					log.Println(name + " pop err: ", err.Error())
@@ -130,7 +142,75 @@ func consume(name string, config config, sig_chan <-chan os.Signal){
 
 				log.Println(name + " get data: ", string(data))
 
-				go requestFpm(config.Route, string(data), work_num)
+				go func() {
+					defer func() {
+						task_wg.Done()
+						<- work_num
+					}()
+
+					requestFpm(config.Route, string(data))
+				}()
+			}
+		}
+	} else if (config.Mq == "redis" && MQ_METHOD_SUB == config.Method) {
+		conn, err := redis.Dial("tcp", config.Host+":"+fmt.Sprint(config.Port))
+		if err != nil {
+			log.Fatal("mq "+name+" connect err",err.Error())
+		}
+		defer conn.Close()
+
+		psc := redis.PubSubConn{conn}
+		psc.Subscribe(config.Topic)
+
+		var sub_wg sync.WaitGroup
+		sub_wg.Add(1)
+
+		go func() {
+			defer sub_wg.Done()
+
+			LoopSub:
+			for{
+				switch msg := psc.Receive().(type) {
+				case redis.Message:
+					task_wg.Add(1)
+					work_num <- 1
+
+					log.Println(name + " get sub data: ", string(msg.Data))
+
+					go func() {
+						defer func() {
+							task_wg.Done()
+							<- work_num
+						}()
+
+						requestFpm(config.Route, string(msg.Data))
+					}()
+				case redis.Subscription:
+					log.Printf(name + " subscription info: %s %s %d\n", msg.Kind, msg.Channel, msg.Count)
+					if msg.Count == 0 {
+						return
+					}
+				case error:
+					log.Println(name + " sub err: ", msg.Error())
+
+					break LoopSub
+				}
+			}
+		}()
+
+		LoopSubSig:
+		for {
+			select {
+			case sig := <-sig_chan:
+				psc.Unsubscribe(config.Topic)
+
+				sub_wg.Wait()
+
+				log.Println("consumer " + name + " receive signal " + sig.String())
+				task_wg.Wait()
+				log.Println("break consumer: " + name)
+
+				break LoopSubSig
 			}
 		}
 	} else {
@@ -139,12 +219,7 @@ func consume(name string, config config, sig_chan <-chan os.Signal){
 }
 
 //通过fastcgi发送数据给fpm
-func requestFpm(route route, data string, work_num <-chan int) {
-	defer func() {
-		consumer_wg.Done()
-		<- work_num
-	}()
-
+func requestFpm(route route, data string) {
 	reqParams := "data="+data
 
 	uri := ""
