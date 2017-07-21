@@ -1,10 +1,10 @@
 package queue
 
 import (
-	"github.com/garyburd/redigo/redis"
-	"fmt"
-	"strings"
 	"config"
+	"fmt"
+	"github.com/garyburd/redigo/redis"
+	"strings"
 )
 
 type Redis struct {
@@ -14,7 +14,7 @@ type Redis struct {
 
 //连接redis
 func getRedisInstance(config config.Config) (Queue, error) {
-	conn, err := redis.Dial("tcp", config.Host + ":" + fmt.Sprint(config.Port))
+	conn, err := redis.Dial("tcp", config.Host+":"+fmt.Sprint(config.Port))
 	if err != nil {
 		return nil, err
 	}
@@ -35,10 +35,10 @@ func getRedisInstance(config config.Config) (Queue, error) {
 	return Redis{Base{config}, conn}, err
 }
 
-func (queue Redis)Pop() (string, error) {
+func (queue Redis) Pop() (string, error) {
 	data, err := redis.Bytes(queue.conn.Do("lpop", queue.config.Topic))
-	if (nil != err) {
-		if (strings.Contains(err.Error(), "nil returned")) {
+	if nil != err {
+		if strings.Contains(err.Error(), "nil returned") {
 			return "", nil
 		}
 
@@ -47,6 +47,6 @@ func (queue Redis)Pop() (string, error) {
 
 	return string(data), err
 }
-func (queue Redis)Close() {
+func (queue Redis) Close() {
 	queue.conn.Close()
 }

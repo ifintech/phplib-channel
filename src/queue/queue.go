@@ -1,10 +1,10 @@
 package queue
 
 import (
-	"strings"
-	"errors"
-	"sync"
 	"config"
+	"errors"
+	"strings"
+	"sync"
 )
 
 const TYPE_REDIS = "redis"
@@ -54,7 +54,7 @@ func GetInstance(name string, config config.Config) (Queue, error) {
 		return nil, errors.New("invalid type: " + mq_type)
 	}
 
-	if (nil == err) {
+	if nil == err {
 		conn_pool[key] = instance
 	}
 

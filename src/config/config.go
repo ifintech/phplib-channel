@@ -1,24 +1,24 @@
 package config
 
 import (
-	"strings"
-	"path/filepath"
-	"os"
-	"log"
-	"io/ioutil"
 	"encoding/json"
+	"io/ioutil"
+	"log"
+	"os"
+	"path/filepath"
+	"strings"
 )
 
 type Config struct {
 	Mq       string `json:"mq"`
 	Method   string `json:"method"`
 	Host     string `json:"host"`
-	Port     int `json:"port"`
-	Db       int `json:"db"`
+	Port     int    `json:"port"`
+	Db       int    `json:"db"`
 	Auth     string `json:"auth"`
-	Max_work int `json:"max_work"`
+	Max_work int    `json:"max_work"`
 	Topic    string `json:"topic"`
-	Route    Route `json:"route"`
+	Route    Route  `json:"route"`
 }
 type Route struct {
 	Module     string `json:"module"`

@@ -1,17 +1,21 @@
 package main
 
 import (
-	"os"
-	"sync"
-	"log"
-	"time"
-	"fcgiclient"
-	"io/ioutil"
-	"queue"
-	"mq"
 	"config"
+	"fcgiclient"
+	"fmt"
+	"io/ioutil"
+	"log"
+	"mq"
+	"os"
 	"os/exec"
+	"queue"
+	"sync"
+	"time"
 )
+
+const FPM_HOST = "127.0.0.1"
+const FPM_PORT = 9000
 
 type Worker struct {
 	name       string
@@ -37,7 +41,7 @@ func newWorker(name string, config config.Config, sig_chan chan os.Signal) *Work
 
 //主动拉取消息队列
 func (worker *Worker) doPop() {
-	if (!queue.IsValidType(worker.config.Mq)) {
+	if !queue.IsValidType(worker.config.Mq) {
 		log.Println("consumer ", worker.name, " not support queue type ", worker.config.Mq)
 
 		return
@@ -58,11 +62,11 @@ func (worker *Worker) doPop() {
 		default:
 			q, err := queue.GetInstance(worker.name, worker.config)
 			if err != nil {
-				log.Println(worker.name + " get queue instance err: ", err.Error())
+				log.Println(worker.name+" get queue instance err: ", err.Error())
 				time.Sleep(time.Second * 1)
 				continue
 			}
-			if (!isFpmOn()) {
+			if !isFpmOn() {
 				log.Println(worker.name, "fpm off")
 				time.Sleep(time.Second * 1)
 				continue
@@ -72,8 +76,8 @@ func (worker *Worker) doPop() {
 			worker.worker_num <- 1
 
 			data, err := q.Pop()
-			if (nil != err) {
-				log.Println(worker.name + " pop err: ", err.Error())
+			if nil != err {
+				log.Println(worker.name+" pop err: ", err.Error())
 
 				worker.task_wg.Done()
 				<-worker.worker_num
@@ -82,7 +86,7 @@ func (worker *Worker) doPop() {
 				queue.RemoveInstance(worker.config.Mq, worker.name)
 				continue
 			}
-			if ("" == data) {
+			if "" == data {
 				worker.task_wg.Done()
 				<-worker.worker_num
 
@@ -90,7 +94,7 @@ func (worker *Worker) doPop() {
 				continue
 			}
 
-			log.Println(worker.name + " pop data: ", data)
+			log.Println(worker.name+" pop data: ", data)
 
 			go func() {
 				defer func() {
@@ -106,7 +110,7 @@ func (worker *Worker) doPop() {
 
 //订阅消息队列
 func (worker *Worker) doSub() {
-	if (!mq.IsValidType(worker.config.Mq)) {
+	if !mq.IsValidType(worker.config.Mq) {
 		log.Println("consumer ", worker.name, " not support mq type: ", worker.config.Mq)
 
 		return
@@ -127,41 +131,41 @@ func (worker *Worker) doSub() {
 		var err error
 		defer sub_wg.Done()
 
-		for{
-			if (!is_run) {
+		for {
+			if !is_run {
 				return
 			}
 
 			q, err = mq.GetInstance(worker.name, worker.config)
-			if (nil != err) {
-				log.Println(worker.name + " get mq instance err: ", err.Error())
+			if nil != err {
+				log.Println(worker.name+" get mq instance err: ", err.Error())
 				time.Sleep(time.Second * 1)
 				continue
 			}
-			if (!isFpmOn()) {
+			if !isFpmOn() {
 				log.Println(worker.name, "fpm off")
 				time.Sleep(time.Second * 1)
 				continue
 			}
 
 			data, err := q.Sub()
-			if (nil != err) {
+			if nil != err {
 				//断线后清除实例, 再次循环时重新获取新实例
 				mq.RemoveInstance(worker.config.Mq, worker.name)
 
-				log.Println(worker.name + " sub err: ", err.Error())
+				log.Println(worker.name+" sub err: ", err.Error())
 				continue
 			}
-			if ("" != data) {
+			if "" != data {
 				worker.task_wg.Add(1)
 				worker.worker_num <- 1
 
-				log.Println(worker.name + " get sub data: ", data)
+				log.Println(worker.name+" get sub data: ", data)
 
 				go func() {
 					defer func() {
 						worker.task_wg.Done()
-						<- worker.worker_num
+						<-worker.worker_num
 					}()
 
 					requestFpm(worker.config.Route, data)
@@ -175,7 +179,7 @@ func (worker *Worker) doSub() {
 		case sig := <-worker.sig_chan:
 			log.Println("consumer " + worker.name + " receive signal: " + sig.String())
 
-			if (nil != q) {
+			if nil != q {
 				q.UnSub()
 			}
 			is_run = false
@@ -191,7 +195,7 @@ func (worker *Worker) doSub() {
 }
 
 func isFpmOn() bool {
-	cmd := "netstat -anpl | grep 9000"
+	cmd := "netstat -anpl | grep " + fmt.Sprint(FPM_PORT)
 	err := exec.Command("bash", "-c", cmd).Run()
 
 	if err == nil {
@@ -203,24 +207,24 @@ func isFpmOn() bool {
 
 //通过fastcgi发送数据给fpm
 func requestFpm(route config.Route, data string) {
-	reqParams := "data="+data
+	reqParams := "data=" + data
 
 	uri := ""
 	if "Index" != route.Module {
-		uri = "/"+route.Module
+		uri = "/" + route.Module
 	}
 
 	env := make(map[string]string)
 	env["REQUEST_METHOD"] = "POST"
-	env["SCRIPT_FILENAME"] = config.GetParentDirectory(config.GetCurrentDirectory())+"/public/consumer.php"
-	env["REQUEST_URI"] = uri+"/"+route.Controller+"/"+route.Action
+	env["SCRIPT_FILENAME"] = config.GetParentDirectory(config.GetCurrentDirectory()) + "/public/consumer.php"
+	env["REQUEST_URI"] = uri + "/" + route.Controller + "/" + route.Action
 	env["SERVER_SOFTWARE"] = "go / fastcgiclient "
 	env["REMOTE_ADDR"] = "127.0.0.1"
 	env["SERVER_PROTOCOL"] = "HTTP/1.1"
 	env["QUERY_STRING"] = reqParams
 	env["PATH_INFO"] = env["REQUEST_URI"]
 
-	fcgi, err := fcgiclient.New("127.0.0.1", 9000)
+	fcgi, err := fcgiclient.New(FPM_HOST, FPM_PORT)
 	if err != nil {
 		log.Println("fastcgi connect err: ", err)
 		return
@@ -239,7 +243,7 @@ func requestFpm(route config.Route, data string) {
 		log.Println("err:", err)
 		return
 	}
-	log.Println("response msg: " , string(content))
+	log.Println("response msg: ", string(content))
 
 	return
 }

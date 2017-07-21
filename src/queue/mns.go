@@ -11,8 +11,8 @@ func getMnsInstance(config config.Config) (Queue, error) {
 	return Mns{Base{config}}, nil
 }
 
-func (queue Mns)Pop() (string, error) {
+func (queue Mns) Pop() (string, error) {
 	return "", nil
 }
-func (queue Mns)Close() {
+func (queue Mns) Close() {
 }

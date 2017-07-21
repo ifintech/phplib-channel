@@ -1,12 +1,12 @@
 package queue
 
 import (
+	"config"
+	"encoding/json"
 	"fmt"
-	"testing"
 	"io/ioutil"
 	"log"
-	"encoding/json"
-	"config"
+	"testing"
 )
 
 func TestPopRedis(t *testing.T) {
@@ -20,9 +20,9 @@ func TestPopRedis(t *testing.T) {
 		log.Fatal("json decoding faild err:", err.Error())
 	}
 
-	for name, config := range configs{
+	for name, config := range configs {
 		queue, err := GetInstance(name, config)
-		if (nil != err) {
+		if nil != err {
 			fmt.Println(err)
 			continue
 		}

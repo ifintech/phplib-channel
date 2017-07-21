@@ -8,19 +8,19 @@ import (
 	"bufio"
 	"bytes"
 	"encoding/binary"
-	"sync"
 	"errors"
 	"io"
 	"io/ioutil"
+	"mime/multipart"
 	"net"
-	"net/url"
+	"net/http"
 	"net/http/httputil"
 	"net/textproto"
-	"strconv"
+	"net/url"
 	"os"
-	"net/http"
-	"mime/multipart"
 	"path/filepath"
+	"strconv"
+	"sync"
 	"time"
 )
 
@@ -92,7 +92,7 @@ func (h *header) init(recType uint8, reqId uint16, contentLength int) {
 }
 
 type record struct {
-	h   header
+	h    header
 	rbuf []byte
 }
 
@@ -124,7 +124,7 @@ type FCGIClient struct {
 	mutex     sync.Mutex
 	rwc       io.ReadWriteCloser
 	h         header
-	buf 	    bytes.Buffer
+	buf       bytes.Buffer
 	keepAlive bool
 	reqId     uint16
 }
@@ -177,7 +177,7 @@ func (this *FCGIClient) Close() {
 	this.rwc.Close()
 }
 
-func (this *FCGIClient) writeRecord(recType uint8, content []byte) ( err error) {
+func (this *FCGIClient) writeRecord(recType uint8, content []byte) (err error) {
 	this.mutex.Lock()
 	defer this.mutex.Unlock()
 	this.buf.Reset()
@@ -208,8 +208,8 @@ func (this *FCGIClient) writeEndRequest(appStatus int, protocolStatus uint8) err
 }
 
 func (this *FCGIClient) writePairs(recType uint8, pairs map[string]string) error {
-	w  := newWriter(this, recType)
-	b  := make([]byte, 8)
+	w := newWriter(this, recType)
+	b := make([]byte, 8)
 	nn := 0
 	for k, v := range pairs {
 		m := 8 + len(k) + len(v)
@@ -239,7 +239,6 @@ func (this *FCGIClient) writePairs(recType uint8, pairs map[string]string) error
 	w.Close()
 	return nil
 }
-
 
 func readSize(s []byte) (uint32, int) {
 	if len(s) == 0 {
@@ -324,8 +323,8 @@ func (w *streamWriter) Close() error {
 }
 
 type streamReader struct {
-	c       *FCGIClient
-	buf     []byte
+	c   *FCGIClient
+	buf []byte
 }
 
 func (w *streamReader) Read(p []byte) (n int, err error) {
@@ -369,7 +368,7 @@ func (this *FCGIClient) Do(p map[string]string, req io.Reader) (r io.Reader, err
 	}
 	body.Close()
 
-	r = &streamReader{c:this}
+	r = &streamReader{c: this}
 	return
 }
 
@@ -395,7 +394,7 @@ func (this *FCGIClient) Request(p map[string]string, req io.Reader) (resp *http.
 
 	// TODO: fixTransferEncoding ?
 	resp.TransferEncoding = resp.Header["Transfer-Encoding"]
-	resp.ContentLength,_ = strconv.ParseInt(resp.Header.Get("Content-Length"), 10, 64)
+	resp.ContentLength, _ = strconv.ParseInt(resp.Header.Get("Content-Length"), 10, 64)
 
 	if chunked(resp.TransferEncoding) {
 		resp.Body = ioutil.NopCloser(httputil.NewChunkedReader(rb))
@@ -424,11 +423,10 @@ func (this *FCGIClient) Post(p map[string]string, bodyType string, body io.Reade
 	}
 	p["CONTENT_LENGTH"] = strconv.Itoa(l)
 	if len(bodyType) > 0 {
-		p["CONTENT_TYPE"]   = bodyType
+		p["CONTENT_TYPE"] = bodyType
 	} else {
-		p["CONTENT_TYPE"]   = "application/x-www-form-urlencoded"
+		p["CONTENT_TYPE"] = "application/x-www-form-urlencoded"
 	}
-
 
 	return this.Request(p, body)
 }
@@ -446,7 +444,7 @@ func (this *FCGIClient) PostForm(p map[string]string, data url.Values) (resp *ht
 func (this *FCGIClient) PostFile(p map[string]string, data url.Values, file map[string]string) (resp *http.Response, err error) {
 	buf := &bytes.Buffer{}
 	writer := multipart.NewWriter(buf)
-	bodyType  := writer.FormDataContentType()
+	bodyType := writer.FormDataContentType()
 
 	for key, val := range data {
 		for _, v0 := range val {

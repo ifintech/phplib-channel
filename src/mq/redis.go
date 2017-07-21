@@ -1,9 +1,9 @@
 package mq
 
 import (
-	"github.com/garyburd/redigo/redis"
-	"fmt"
 	"config"
+	"fmt"
+	"github.com/garyburd/redigo/redis"
 )
 
 type Redis struct {
@@ -13,7 +13,7 @@ type Redis struct {
 
 //连接redis
 func getRedisInstance(config config.Config) (Mq, error) {
-	conn, err := redis.Dial("tcp", config.Host + ":" + fmt.Sprint(config.Port))
+	conn, err := redis.Dial("tcp", config.Host+":"+fmt.Sprint(config.Port))
 	if err != nil {
 		return nil, err
 	}
@@ -52,7 +52,7 @@ func (mq Redis) Sub() (string, error) {
 	return "", nil
 }
 
-func (mq Redis) UnSub()  {
+func (mq Redis) UnSub() {
 	mq.conn.Unsubscribe(mq.config.Topic)
 }
 
