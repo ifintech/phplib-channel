@@ -17,8 +17,22 @@ type Worker struct {
 	name       string
 	config     config.Config
 	worker_num chan int
-	sig_chan   <-chan os.Signal
+	sig_chan   chan os.Signal
 	task_wg    sync.WaitGroup
+}
+
+func newWorker(name string, config config.Config, sig_chan chan os.Signal) *Worker {
+	var task_wg sync.WaitGroup
+	//设置最大的请求并发量
+	worker_num := make(chan int, config.Max_work)
+
+	return &Worker{
+		name:       name,
+		config:     config,
+		worker_num: worker_num,
+		sig_chan:   sig_chan,
+		task_wg:    task_wg,
+	}
 }
 
 //主动拉取消息队列

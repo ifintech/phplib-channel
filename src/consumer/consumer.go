@@ -32,29 +32,32 @@ func main() {
 	signal.Notify(sigs, syscall.SIGINT, syscall.SIGTERM)
 
 	var wg sync.WaitGroup
-	var worker_sigs = make(map[string](chan os.Signal))
+	var workers = make(map[string](*Worker))
 
 	configs := config.LoadConfig()
+
 	for name, conf := range configs {
-		worker_sigs[name] = make(chan os.Signal, 1)
+		sig_chan := make(chan os.Signal, 1)
+		workers[name] = newWorker(name, conf, sig_chan)
+
 		wg.Add(1)
 
-		go func(name string, conf config.Config, sig_chan <-chan os.Signal) {
+		go func(worker *Worker) {
 			defer wg.Done()
 
-			consume(name, conf, sig_chan)
-		}(name, conf, worker_sigs[name])
+			consume(worker)
+		}(workers[name])
 	}
 
 Loop:
-	//主进程不退出，直到收到信号退出，同时通知协程停止获取数据，处理完积压数据
+	//主进程阻塞直到收到信号退出，同时通知协程停止获取数据，处理完积压数据
 	for {
 		select {
 		case sig := <-sigs:
-			log.Println("master receive receive signal " + sig.String())
+			log.Println("master receive receive signal", sig.String())
 
-			for _, sig_chan := range worker_sigs {
-				sig_chan <- sig
+			for _, worker := range workers {
+				worker.sig_chan <- sig
 			}
 
 			break Loop
@@ -67,24 +70,13 @@ Loop:
 }
 
 //消费消息队列
-func consume(name string, config config.Config, sig_chan <-chan os.Signal) {
-	var task_wg sync.WaitGroup
-	//设置最大的请求并发量
-	worker_num := make(chan int, config.Max_work)
-
-	worker := Worker{
-		name:       name,
-		config:     config,
-		worker_num: worker_num,
-		sig_chan:   sig_chan,
-		task_wg:    task_wg,
-	}
-	if METHOD_POP == config.Method {
+func consume(worker *Worker) {
+	if METHOD_POP == worker.config.Method {
 		worker.doPop()
-	} else if METHOD_SUB == config.Method {
+	} else if METHOD_SUB == worker.config.Method {
 		worker.doSub()
 	} else {
-		log.Println("consumer ", name, " not support method: ", config.Method)
+		log.Println("consumer", worker.name, "not support method:", worker.config.Method)
 	}
 }
 
