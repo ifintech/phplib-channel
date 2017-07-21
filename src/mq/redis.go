@@ -34,10 +34,10 @@ func getRedisInstance(config config.Config) (Mq, error) {
 	psc := redis.PubSubConn{conn}
 	psc.Subscribe(config.Topic)
 
-	return &Redis{Base{config: config}, psc}, err
+	return Redis{Base{config: config}, psc}, err
 }
 
-func (mq *Redis) Sub() (string, error) {
+func (mq Redis) Sub() (string, error) {
 	switch msg := mq.conn.Receive().(type) {
 	case redis.Message:
 		return string(msg.Data), nil
