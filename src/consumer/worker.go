@@ -132,7 +132,7 @@ func (worker *Worker) doSub() {
 
 			data, err := q.Sub()
 			if (nil != err) {
-				//断线后清除实例, 再次循环时重新获取新实例5-2.csv
+				//断线后清除实例, 再次循环时重新获取新实例
 				mq.RemoveInstance(worker.config.Mq, worker.name)
 
 				log.Println(worker.name + " sub err: ", err.Error())
