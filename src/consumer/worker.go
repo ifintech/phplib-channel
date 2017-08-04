@@ -42,27 +42,27 @@ func newWorker(name string, config config.Config, sig_chan chan os.Signal) *Work
 //主动拉取消息队列
 func (worker *Worker) doPop() {
 	if !queue.IsValidType(worker.config.Mq) {
-		log.Println("consumer ", worker.name, " not support queue type ", worker.config.Mq)
+		log.Println("consumer", worker.name, " not support queue type:", worker.config.Mq)
 
 		return
 	}
-	log.Println("consumer ", worker.name, " start pop")
+	log.Println("consumer", worker.name, "start pop")
 
 	defer queue.RemoveInstance(worker.config.Mq, worker.name)
 
 	for {
 		select {
 		case sig := <-worker.sig_chan:
-			log.Println("consumer " + worker.name + " receive signal " + sig.String())
+			log.Println("consumer", worker.name, "receive signal", sig.String())
 
 			worker.task_wg.Wait()
-			log.Println("break consumer: " + worker.name)
+			log.Println("break consumer", worker.name)
 
 			return
 		default:
 			q, err := queue.GetInstance(worker.name, worker.config)
 			if err != nil {
-				log.Println(worker.name+" get queue instance err: ", err.Error())
+				log.Println(worker.name, "get queue instance err:", err.Error())
 				time.Sleep(time.Second * 1)
 				continue
 			}
@@ -77,7 +77,7 @@ func (worker *Worker) doPop() {
 
 			data, err := q.Pop()
 			if nil != err {
-				log.Println(worker.name+" pop err: ", err.Error())
+				log.Println(worker.name, "pop err:", err.Error())
 
 				worker.task_wg.Done()
 				<-worker.worker_num
@@ -138,7 +138,7 @@ func (worker *Worker) doSub() {
 
 			q, err = mq.GetInstance(worker.name, worker.config)
 			if nil != err {
-				log.Println(worker.name+" get mq instance err: ", err.Error())
+				log.Println(worker.name, "get mq instance err: ", err.Error())
 				time.Sleep(time.Second * 1)
 				continue
 			}
@@ -153,14 +153,14 @@ func (worker *Worker) doSub() {
 				//断线后清除实例, 再次循环时重新获取新实例
 				mq.RemoveInstance(worker.config.Mq, worker.name)
 
-				log.Println(worker.name+" sub err: ", err.Error())
+				log.Println(worker.name, "sub err: ", err.Error())
 				continue
 			}
 			if "" != data {
 				worker.task_wg.Add(1)
 				worker.worker_num <- 1
 
-				log.Println(worker.name+" get sub data: ", data)
+				log.Println(worker.name, "get sub data: ", data)
 
 				go func() {
 					defer func() {
@@ -177,7 +177,7 @@ func (worker *Worker) doSub() {
 	for {
 		select {
 		case sig := <-worker.sig_chan:
-			log.Println("consumer " + worker.name + " receive signal: " + sig.String())
+			log.Println("consumer", worker.name, "receive signal", sig.String())
 
 			if nil != q {
 				q.UnSub()
@@ -187,7 +187,7 @@ func (worker *Worker) doSub() {
 			sub_wg.Wait()
 			worker.task_wg.Wait()
 
-			log.Println("break consumer: " + worker.name)
+			log.Println("break consumer", worker.name)
 
 			return
 		}
@@ -216,7 +216,7 @@ func requestFpm(route config.Route, data string) {
 
 	env := make(map[string]string)
 	env["REQUEST_METHOD"] = "POST"
-	env["SCRIPT_FILENAME"] = config.GetParentDirectory(config.GetCurrentDirectory()) + "/public/consumer.php"
+	env["SCRIPT_FILENAME"] = config.APP_ROOT_PATH + app_name + "/public/consumer.php"
 	env["REQUEST_URI"] = uri + "/" + route.Controller + "/" + route.Action
 	env["SERVER_SOFTWARE"] = "go / fastcgiclient "
 	env["REMOTE_ADDR"] = "127.0.0.1"
@@ -225,16 +225,19 @@ func requestFpm(route config.Route, data string) {
 	env["PATH_INFO"] = env["REQUEST_URI"]
 
 	fcgi, err := fcgiclient.New(FPM_HOST, FPM_PORT)
+	defer fcgi.Close()
+
 	if err != nil {
 		log.Println("fastcgi connect err: ", err)
 		return
 
 	}
-	defer fcgi.Close()
 
 	resp, err := fcgi.Get(env)
+	defer resp.Body.Close()
+
 	if err != nil {
-		log.Println("fastcgi response err: ", err)
+		log.Println("fastcgi response err:", err)
 		return
 	}
 
@@ -243,7 +246,7 @@ func requestFpm(route config.Route, data string) {
 		log.Println("err:", err)
 		return
 	}
-	log.Println("response msg: ", string(content))
+	log.Println("response msg:", string(content))
 
 	return
 }

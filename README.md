@@ -18,11 +18,7 @@ phplib-channel是一个基于go语言的协程(coroutine)实现的消息队列�
 
 假设业务代码根目录为/data1/htdocs/demo
 
-1. 将编译过的可执行文件consumer放在业务代码目录bin下  
-```bash
-/data1/htdocs/demo/bin/consumer
-```
-2. 在/data1/htdocs/demo/bin中添加消息队列配置文件config.json  
+1. 在/data1/htdocs/demo/conf/server中添加消息队列配置文件config.json  
 配置文件格式示范
 ```json
 {
@@ -58,9 +54,9 @@ phplib-channel是一个基于go语言的协程(coroutine)实现的消息队列�
   }
 }
 ```
-3. 启动服务
+2. 启动服务
 ```bash
-nohup /data1/htdocs/demo/bin/consumer >> /data1/logs/demo/consumer.log 2>&1 &
+nohup /data1/htdocs/consumer -app=demo >> /data1/logs/demo/consumer.log 2>&1 &
 ```
 
 ## 适用场景
