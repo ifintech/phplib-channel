@@ -3,12 +3,10 @@ package main
 import (
 	"config"
 	"fcgiclient"
-	"fmt"
 	"io/ioutil"
 	"log"
 	"mq"
 	"os"
-	"os/exec"
 	"queue"
 	"sync"
 	"time"
@@ -94,7 +92,7 @@ func (worker *Worker) doPop() {
 				continue
 			}
 
-			log.Println(worker.name+" pop data: ", data)
+			log.Println(worker.name, "pop data:", data)
 
 			go func() {
 				defer func() {
@@ -194,15 +192,17 @@ func (worker *Worker) doSub() {
 	}
 }
 
+// 检查fpm状态 todo 待完善
 func isFpmOn() bool {
-	cmd := "netstat -anpl | grep " + fmt.Sprint(FPM_PORT)
-	err := exec.Command("bash", "-c", cmd).Run()
+	return true
+	/*conn, err := net.Dial("tcp", FPM_HOST + ":" + FPM_PORT)
+	defer conn.Close()
 
 	if err == nil {
 		return true
 	} else {
 		return false
-	}
+	}*/
 }
 
 //通过fastcgi发送数据给fpm
@@ -216,7 +216,7 @@ func requestFpm(route config.Route, data string) {
 
 	env := make(map[string]string)
 	env["REQUEST_METHOD"] = "POST"
-	env["SCRIPT_FILENAME"] = config.APP_ROOT_PATH + app_name + "/public/consumer.php"
+	env["SCRIPT_FILENAME"] = config.APP_ROOT_PATH + config.GetAppName() + "/public/consumer.php"
 	env["REQUEST_URI"] = uri + "/" + route.Controller + "/" + route.Action
 	env["SERVER_SOFTWARE"] = "go / fastcgiclient "
 	env["REMOTE_ADDR"] = "127.0.0.1"
@@ -240,6 +240,7 @@ func requestFpm(route config.Route, data string) {
 		log.Println("fastcgi response err:", err)
 		return
 	}
+	defer resp.Body.Close()
 
 	content, err := ioutil.ReadAll(resp.Body)
 	if err != nil {

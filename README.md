@@ -56,7 +56,7 @@ phplib-channel是一个基于go语言的协程(coroutine)实现的消息队列�
 ```
 2. 启动服务
 ```bash
-nohup /data1/htdocs/consumer -app=demo >> /data1/logs/demo/consumer.log 2>&1 &
+nohup /usr/local/bin/consumer -config_file=/data1/htdocs/demo/server/dev/config.json >> /data1/logs/demo/consumer.log 2>&1 &
 ```
 
 ## 适用场景

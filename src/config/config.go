@@ -26,12 +26,15 @@ type Route struct {
 	Action     string `json:"action"`
 }
 
-//加载配置
-//app_name string 应用名称
-func LoadConfig(app_name string) map[string]Config {
-	env := getEnv()
+// 获取项目名称
+func GetAppName() string {
+	return os.Getenv("APP_NAME")
+}
 
-	config_bytes, err := ioutil.ReadFile(APP_ROOT_PATH + app_name + "/conf/server/" + env + "/config.json")
+// 加载配置
+// config_file string 配置文件绝对路径
+func LoadConfig(config_file string) map[string]Config {
+	config_bytes, err := ioutil.ReadFile(config_file)
 	if err != nil {
 		log.Fatal("config file read err:", err.Error())
 	}
@@ -42,13 +45,4 @@ func LoadConfig(app_name string) map[string]Config {
 	}
 
 	return configs
-}
-
-func getEnv() string {
-	env := os.Getenv("RUN_ENV")
-	if "" == env {
-		env = "dev"
-	}
-
-	return env
 }

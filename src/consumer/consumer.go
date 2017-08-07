@@ -19,19 +19,15 @@ const METHOD_SUB = "sub"
 
 const PID_FILE_PATH = "/var/run/"
 
-var app_name string
-
 func main() {
-	ptr_app_name := flag.String("app", "", "app name to start")
+	ptr_config_file := flag.String("config_file", "", "json type config which contains consumer info")
 	flag.Parse()
 
-	app_name = *ptr_app_name
-	if "" == app_name {
-		log.Fatal("app name should be provided")
+	config_file := *ptr_config_file
+	if "" == config_file {
+		log.Fatal("config file should be provided")
 	}
-	if !isValidAppName(app_name) {
-		log.Fatal("app dir: ", config.APP_ROOT_PATH+app_name, " not extsts")
-	}
+	configs := config.LoadConfig(config_file)
 
 	//使用上多核
 	runtime.GOMAXPROCS(runtime.NumCPU())
@@ -46,8 +42,6 @@ func main() {
 
 	var wg sync.WaitGroup
 	var workers = make(map[string](*Worker))
-
-	configs := config.LoadConfig(app_name)
 
 	for name, conf := range configs {
 		sig_chan := make(chan os.Signal, 1)
@@ -93,23 +87,8 @@ func consume(worker *Worker) {
 	}
 }
 
-// 检查app name是否合法
-func isValidAppName(app_name string) bool {
-	_, err := os.Stat(config.APP_ROOT_PATH + app_name)
-	if err == nil {
-		return true
-	}
-	if os.IsNotExist(err) {
-		return false
-	}
-
-	log.Fatal("err checking app name:", err)
-
-	return false
-}
-
 func setProcTitle() {
-	gspt.SetProcTitle("CONSUMER_" + app_name)
+	gspt.SetProcTitle("CONSUMER_" + config.GetAppName())
 }
 
 func recycleLastPid() {
@@ -137,5 +116,5 @@ func savePid() {
 }
 
 func getPidFile() string {
-	return PID_FILE_PATH + "consumer_" + app_name + ".pid"
+	return PID_FILE_PATH + "consumer_" + config.GetAppName() + ".pid"
 }
