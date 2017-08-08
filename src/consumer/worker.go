@@ -45,7 +45,6 @@ func newWorker(name string, config config.Config) *Worker {
 
 func (worker *Worker) do() {
 	defer close(worker.worker_num)
-	defer close(worker.sig_chan)
 
 	if METHOD_POP == worker.config.Method {
 		worker.doPop()
@@ -247,8 +246,6 @@ func requestFpm(route config.Route, data string) {
 	}
 
 	resp, err := fcgi.Get(env)
-	defer resp.Body.Close()
-
 	if err != nil {
 		log.Println("fastcgi response err:", err)
 		return
