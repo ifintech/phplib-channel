@@ -2,8 +2,8 @@ package queue
 
 import (
 	"config"
-	"fmt"
 	"github.com/garyburd/redigo/redis"
+	"strconv"
 	"strings"
 )
 
@@ -14,7 +14,7 @@ type Redis struct {
 
 //连接redis
 func getRedisInstance(config config.Config) (Queue, error) {
-	conn, err := redis.Dial("tcp", config.Host+":"+fmt.Sprint(config.Port))
+	conn, err := redis.Dial("tcp", config.Host+":"+strconv.Itoa(config.Port))
 	if err != nil {
 		return nil, err
 	}

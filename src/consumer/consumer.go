@@ -14,9 +14,6 @@ import (
 	"syscall"
 )
 
-const METHOD_POP = "pop"
-const METHOD_SUB = "sub"
-
 const PID_FILE_PATH = "/var/run/"
 
 func main() {
@@ -44,15 +41,12 @@ func main() {
 	var workers = make(map[string](*Worker))
 
 	for name, conf := range configs {
-		sig_chan := make(chan os.Signal, 1)
-		workers[name] = newWorker(name, conf, sig_chan)
-
+		workers[name] = newWorker(name, conf)
 		wg.Add(1)
-
 		go func(worker *Worker) {
 			defer wg.Done()
 
-			consume(worker)
+			worker.do()
 		}(workers[name])
 	}
 
@@ -74,17 +68,6 @@ Loop:
 	//等待协程完成,退出
 	wg.Wait()
 	log.Println("safe exit")
-}
-
-//消费消息队列
-func consume(worker *Worker) {
-	if METHOD_POP == worker.config.Method {
-		worker.doPop()
-	} else if METHOD_SUB == worker.config.Method {
-		worker.doSub()
-	} else {
-		log.Println("consumer", worker.name, "not support method:", worker.config.Method)
-	}
 }
 
 func setProcTitle() {

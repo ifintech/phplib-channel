@@ -7,10 +7,15 @@ import (
 	"log"
 	"mq"
 	"os"
+	"os/exec"
 	"queue"
+	"strconv"
 	"sync"
 	"time"
 )
+
+const METHOD_POP = "pop"
+const METHOD_SUB = "sub"
 
 const FPM_HOST = "127.0.0.1"
 const FPM_PORT = 9000
@@ -23,10 +28,11 @@ type Worker struct {
 	task_wg    sync.WaitGroup
 }
 
-func newWorker(name string, config config.Config, sig_chan chan os.Signal) *Worker {
+func newWorker(name string, config config.Config) *Worker {
 	var task_wg sync.WaitGroup
 	//设置最大的请求并发量
 	worker_num := make(chan int, config.Max_work)
+	sig_chan := make(chan os.Signal, 1)
 
 	return &Worker{
 		name:       name,
@@ -34,6 +40,19 @@ func newWorker(name string, config config.Config, sig_chan chan os.Signal) *Work
 		worker_num: worker_num,
 		sig_chan:   sig_chan,
 		task_wg:    task_wg,
+	}
+}
+
+func (worker *Worker) do() {
+	defer close(worker.worker_num)
+	defer close(worker.sig_chan)
+
+	if METHOD_POP == worker.config.Method {
+		worker.doPop()
+	} else if METHOD_SUB == worker.config.Method {
+		worker.doSub()
+	} else {
+		log.Println("consumer", worker.name, "not support method:", worker.config.Method)
 	}
 }
 
@@ -69,7 +88,6 @@ func (worker *Worker) doPop() {
 				time.Sleep(time.Second * 1)
 				continue
 			}
-
 			worker.task_wg.Add(1)
 			worker.worker_num <- 1
 
@@ -109,34 +127,30 @@ func (worker *Worker) doPop() {
 //订阅消息队列
 func (worker *Worker) doSub() {
 	if !mq.IsValidType(worker.config.Mq) {
-		log.Println("consumer ", worker.name, " not support mq type: ", worker.config.Mq)
+		log.Println("consumer ", worker.name, "not support mq type:", worker.config.Mq)
 
 		return
 	}
-	log.Println("consumer ", worker.name, " start sub")
+	log.Println("consumer", worker.name, "start sub")
 
 	defer mq.RemoveInstance(worker.config.Mq, worker.name)
 
-	var is_run bool
+	var is_run = true
 	var sub_wg sync.WaitGroup
 	var q mq.Mq
 
 	sub_wg.Add(1)
-
 	go func() {
-		is_run = true
-
-		var err error
 		defer sub_wg.Done()
 
+		var err error
 		for {
 			if !is_run {
 				return
 			}
-
 			q, err = mq.GetInstance(worker.name, worker.config)
 			if nil != err {
-				log.Println(worker.name, "get mq instance err: ", err.Error())
+				log.Println(worker.name, "get mq instance err:", err.Error())
 				time.Sleep(time.Second * 1)
 				continue
 			}
@@ -145,7 +159,6 @@ func (worker *Worker) doSub() {
 				time.Sleep(time.Second * 1)
 				continue
 			}
-
 			data, err := q.Sub()
 			if nil != err {
 				//断线后清除实例, 再次循环时重新获取新实例
@@ -192,17 +205,17 @@ func (worker *Worker) doSub() {
 	}
 }
 
-// 检查fpm状态 todo 待完善
+// 检查fpm状态 todo 待完善 当前存在内存泄漏
 func isFpmOn() bool {
 	return true
-	/*conn, err := net.Dial("tcp", FPM_HOST + ":" + FPM_PORT)
-	defer conn.Close()
+	cmd := "netstat -anpl | grep " + strconv.Itoa(FPM_PORT)
+	err := exec.Command("bash", "-c", cmd).Run()
 
 	if err == nil {
 		return true
 	} else {
 		return false
-	}*/
+	}
 }
 
 //通过fastcgi发送数据给fpm
