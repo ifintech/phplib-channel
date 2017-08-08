@@ -1,7 +1,6 @@
 package main
 
 import (
-	"config"
 	"flag"
 	"github.com/erikdubbelboer/gspt"
 	"io/ioutil"
@@ -14,21 +13,18 @@ import (
 	"syscall"
 )
 
+const METHOD_POP = "pop"
+
 const PID_FILE_PATH = "/var/run/"
 
 func main() {
-	ptr_config_file := flag.String("config_file", "", "json type config which contains consumer info")
+	config_path := flag.String("f", "", "config file path")
 	flag.Parse()
-
-	config_file := *ptr_config_file
-	if "" == config_file {
-		log.Fatal("config file should be provided")
-	}
-	configs := config.LoadConfig(config_file)
 
 	//使用上多核
 	runtime.GOMAXPROCS(runtime.NumCPU())
 
+	//pid
 	setProcTitle()
 	recycleLastPid()
 	savePid()
@@ -40,13 +36,15 @@ func main() {
 	var wg sync.WaitGroup
 	var workers = make(map[string](*Worker))
 
+	configs := LoadConfig(config_path)
+
 	for name, conf := range configs {
-		workers[name] = newWorker(name, conf)
+		sig_chan := make(chan os.Signal, 1)
+		workers[name] = newWorker(name, conf, sig_chan)
 		wg.Add(1)
 		go func(worker *Worker) {
 			defer wg.Done()
-
-			worker.do()
+			consume(worker)
 		}(workers[name])
 	}
 
@@ -70,8 +68,17 @@ Loop:
 	log.Println("safe exit")
 }
 
+//消费消息队列
+func consume(worker *Worker) {
+	if METHOD_POP == worker.config.Method {
+		worker.doPop()
+	} else {
+		log.Println("consumer", worker.name, "not support method:", worker.config.Method)
+	}
+}
+
 func setProcTitle() {
-	gspt.SetProcTitle("CONSUMER_" + config.GetAppName())
+	gspt.SetProcTitle("php-fpm: pool consumer channel")
 }
 
 func recycleLastPid() {
@@ -99,5 +106,5 @@ func savePid() {
 }
 
 func getPidFile() string {
-	return PID_FILE_PATH + "consumer_" + config.GetAppName() + ".pid"
+	return PID_FILE_PATH + "php-fpm.consumer.pid"
 }

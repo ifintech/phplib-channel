@@ -1,19 +1,14 @@
 package mq
 
 import (
-	"config"
 	"github.com/garyburd/redigo/redis"
 	"strconv"
+	"strings"
 )
 
-type Redis struct {
-	Base
-	conn redis.PubSubConn
-}
-
 //连接redis
-func getRedisInstance(config config.Config) (Mq, error) {
-	conn, err := redis.Dial("tcp", config.Host+":"+strconv.Itoa(config.Port))
+func connect(config Config) (interface{}, error) {
+	conn, err := redis.Dial("tcp", config.Dsn.Host+":"+strconv.Itoa(config.Dsn.Port))
 	if err != nil {
 		return nil, err
 	}
@@ -31,31 +26,21 @@ func getRedisInstance(config config.Config) (Mq, error) {
 		}
 	}
 
-	psc := redis.PubSubConn{conn}
-	psc.Subscribe(config.Topic)
-
-	return Redis{Base{config: config}, psc}, err
+	return conn, err
 }
 
-func (mq Redis) Sub() (string, error) {
-	switch msg := mq.conn.Receive().(type) {
-	case redis.Message:
-		return string(msg.Data), nil
-	case redis.Subscription:
-		if msg.Count == 0 {
+func RedisPop(config Config) (data string, err error) {
+	conn, err := connect(config)
+	if err != nil {
+		return nil, err
+	}
+	data, err = redis.Bytes(conn.Do("lpop", config.Topic))
+	if err != nil {
+		if strings.Contains(err.Error(), "nil returned") {
 			return "", nil
 		}
-	case error:
-		return "", msg
+		return nil, err
 	}
 
-	return "", nil
-}
-
-func (mq Redis) UnSub() {
-	mq.conn.Unsubscribe(mq.config.Topic)
-}
-
-func (mq Redis) Close() {
-	mq.conn.Close()
+	return string(data), err
 }
