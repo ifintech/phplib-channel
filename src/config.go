@@ -10,7 +10,6 @@ import (
 type Config struct {
 	Mq       string `json:"mq"`
 	Method   string `json:"method"`
-	App_name string `json:"app_name"`
 	Dsn      Dsn    `json:"dsn"`
 	Max_work int    `json:"max_work"`
 	Topic    string `json:"topic"`
@@ -23,6 +22,8 @@ type Dsn struct {
 	Db       int    `json:"db"`
 	Auth     string `json:"auth"`
 }
+
+var App_name string
 
 //加载配置
 //app_name string 应用名称

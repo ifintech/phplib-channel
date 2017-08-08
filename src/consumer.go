@@ -11,14 +11,16 @@ import (
 	"strconv"
 	"sync"
 	"syscall"
+	"fmt"
 )
 
 const METHOD_POP = "pop"
 
 const PID_FILE_PATH = "/var/run/"
+const CONFIG_FILE_PATH = "/data1/htdocs/%s/bin/channel.json"
 
 func main() {
-	config_path := flag.String("f", "", "config file path")
+	App_name = flag.String("n", "", "config file path")
 	flag.Parse()
 
 	//使用上多核
@@ -36,6 +38,7 @@ func main() {
 	var wg sync.WaitGroup
 	var workers = make(map[string](*Worker))
 
+	config_path := fmt.Sprintf(CONFIG_FILE_PATH, App_name);
 	configs := LoadConfig(config_path)
 
 	for name, conf := range configs {

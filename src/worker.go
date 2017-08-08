@@ -109,7 +109,7 @@ func requestFpm(config Config, data string) {
 
 	env := make(map[string]string)
 	env["REQUEST_METHOD"] = "POST"
-	env["SCRIPT_FILENAME"] = "/data1/htdocs/" + config.App_name + "/public/consumer.php"
+	env["SCRIPT_FILENAME"] = "/data1/htdocs/" + App_name + "/public/consumer.php"
 	env["REQUEST_URI"] = config.Uri
 	env["SERVER_SOFTWARE"] = "go / fastcgiclient "
 	env["REMOTE_ADDR"] = "127.0.0.1"
