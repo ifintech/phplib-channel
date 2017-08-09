@@ -19,7 +19,7 @@ phplib-channel是一个基于go语言的协程(goroutine)实现的消息队列�
 1. 部署任务节点
 
 ```bash
-wget -O /usr/local/bin/consumer https://github.com/ifintech/phplib-channel/blob/master/bin/consumer
+wget -O /usr/local/bin/consumer https://github.com/ifintech/phplib-channel/raw/master/bin/consumer
 chmod +x /usr/local/bin/consumer
 ```
 
