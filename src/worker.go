@@ -93,6 +93,7 @@ func (worker *Worker) doPop() {
 				worker.task_wg.Done()
 				<-worker.worker_num
 
+				time.Sleep(time.Second * 1)
 				continue
 			}
 
@@ -144,7 +145,7 @@ func requestFpm(conf config.Config, data string) {
 
 	fcgi, err := fcgiclient.New(FPM_HOST, FPM_PORT)
 	if err != nil {
-		log.Println("fastcgi connect err: ", err)
+		log.Println("fastcgi connect err:", err)
 		return
 	}
 	defer fcgi.Close()

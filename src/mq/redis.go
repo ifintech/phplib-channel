@@ -56,6 +56,9 @@ func RedisPop(name string, config config.Config) (string, error) {
 		if strings.Contains(err.Error(), "nil returned") {
 			return "", nil
 		}
+		conn.Close()
+		delete(conn_pool, name)
+
 		return "", err
 	}
 
