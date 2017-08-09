@@ -1,13 +1,14 @@
 package main
 
 import (
+	"config"
 	"fcgiclient"
-	"mq"
-	"fmt"
 	"io/ioutil"
 	"log"
+	"mq"
+	"net"
 	"os"
-	"os/exec"
+	"strconv"
 	"sync"
 	"time"
 )
@@ -15,18 +16,25 @@ import (
 const FPM_HOST = "127.0.0.1"
 const FPM_PORT = 9000
 
+const TYPE_REDIS = "redis"
+
+var types = []string{
+	TYPE_REDIS,
+}
+
 type Worker struct {
 	name       string
-	config     Config
+	config     config.Config
 	worker_num chan int
 	sig_chan   chan os.Signal
 	task_wg    sync.WaitGroup
 }
 
-func newWorker(name string, config Config, sig_chan chan os.Signal) *Worker {
+func newWorker(name string, config config.Config) *Worker {
 	var task_wg sync.WaitGroup
 	//设置最大的请求并发量
 	worker_num := make(chan int, config.Max_work)
+	sig_chan := make(chan os.Signal, 1)
 
 	return &Worker{
 		name:       name,
@@ -37,8 +45,23 @@ func newWorker(name string, config Config, sig_chan chan os.Signal) *Worker {
 	}
 }
 
+func isValidType(queue_type string) bool {
+	for _, item := range types {
+		if item == queue_type {
+			return true
+		}
+	}
+	return false
+}
+
 //主动拉取消息队列
 func (worker *Worker) doPop() {
+	if !isValidType(worker.config.Mq) {
+		log.Println("consumer", worker.name, "not support mq:", worker.config.Mq)
+		return
+	}
+
+	log.Println("consumer", worker.name, "start", worker.config.Method, worker.config.Topic)
 	for {
 		select {
 		case sig := <-worker.sig_chan:
@@ -57,8 +80,11 @@ func (worker *Worker) doPop() {
 			worker.task_wg.Add(1)
 			worker.worker_num <- 1
 
+			var data string
+			var err error
+
 			if worker.config.Mq == "redis" {
-				data, err := mq.RedisPop()
+				data, err = mq.RedisPop(worker.name, worker.config)
 			}
 
 			if err != nil {
@@ -70,7 +96,7 @@ func (worker *Worker) doPop() {
 				continue
 			}
 
-			if data == nil {
+			if "" == data {
 				worker.task_wg.Done()
 				<-worker.worker_num
 
@@ -78,7 +104,7 @@ func (worker *Worker) doPop() {
 				continue
 			}
 
-			log.Println(worker.name+" pop data: ", data)
+			log.Println(worker.name, "pop data:", data)
 
 			go func() {
 				defer func() {
@@ -86,17 +112,16 @@ func (worker *Worker) doPop() {
 					<-worker.worker_num
 				}()
 
-				requestFpm(worker.config.Route, data)
+				requestFpm(worker.config, data)
 			}()
 		}
 	}
 }
 
 func isFpmOn() bool {
-	cmd := "netstat -anpl | grep " + fmt.Sprint(FPM_PORT)
-	err := exec.Command("bash", "-c", cmd).Run()
-
+	conn, err := net.Dial("tcp", FPM_HOST+":"+strconv.Itoa(FPM_PORT))
 	if err == nil {
+		conn.Close()
 		return true
 	} else {
 		return false
@@ -104,13 +129,13 @@ func isFpmOn() bool {
 }
 
 //通过fastcgi发送数据给fpm
-func requestFpm(config Config, data string) {
+func requestFpm(conf config.Config, data string) {
 	reqParams := "data=" + data
 
 	env := make(map[string]string)
 	env["REQUEST_METHOD"] = "POST"
-	env["SCRIPT_FILENAME"] = "/data1/htdocs/" + App_name + "/public/consumer.php"
-	env["REQUEST_URI"] = config.Uri
+	env["SCRIPT_FILENAME"] = "/data1/htdocs/" + config.GetAppName() + "/public/consumer.php"
+	env["REQUEST_URI"] = conf.Uri
 	env["SERVER_SOFTWARE"] = "go / fastcgiclient "
 	env["REMOTE_ADDR"] = "127.0.0.1"
 	env["SERVER_PROTOCOL"] = "HTTP/1.1"
@@ -118,21 +143,18 @@ func requestFpm(config Config, data string) {
 	env["PATH_INFO"] = env["REQUEST_URI"]
 
 	fcgi, err := fcgiclient.New(FPM_HOST, FPM_PORT)
-	defer fcgi.Close()
-
 	if err != nil {
 		log.Println("fastcgi connect err: ", err)
 		return
-
 	}
+	defer fcgi.Close()
 
 	resp, err := fcgi.Get(env)
-	defer resp.Body.Close()
-
 	if err != nil {
 		log.Println("fastcgi response err:", err)
 		return
 	}
+	defer resp.Body.Close()
 
 	content, err := ioutil.ReadAll(resp.Body)
 	if err != nil {

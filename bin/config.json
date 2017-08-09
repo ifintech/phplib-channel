@@ -2,19 +2,14 @@
   "consumer1": {
     "mq": "redis",
     "method":"pop",
+    "max_work": 4,
+    "topic": "test1",
+    "uri": "Consumer/Demo/doSth",
     "dsn": {
       "host": "127.0.0.1",
       "port": 6379,
       "db": 0,
       "auth": "password"
-    },
-    "app_name": "demo",
-    "max_work": 4,
-    "topic": "test1",
-    "route": {
-      "module":"Index",
-      "controller":"Consumer/Demo",
-      "action":"doSth"
     }
   }
 }

@@ -1,6 +1,7 @@
 package main
 
 import (
+	"config"
 	"flag"
 	"github.com/erikdubbelboer/gspt"
 	"io/ioutil"
@@ -11,16 +12,14 @@ import (
 	"strconv"
 	"sync"
 	"syscall"
-	"fmt"
 )
 
 const METHOD_POP = "pop"
 
 const PID_FILE_PATH = "/var/run/"
-const CONFIG_FILE_PATH = "/data1/htdocs/%s/bin/channel.json"
 
 func main() {
-	App_name = flag.String("n", "", "config file path")
+	config_file_path := flag.String("f", "", "config file path")
 	flag.Parse()
 
 	//使用上多核
@@ -31,6 +30,8 @@ func main() {
 	recycleLastPid()
 	savePid()
 
+	log.Println("master start")
+
 	//注册信号
 	sigs := make(chan os.Signal, 1)
 	signal.Notify(sigs, syscall.SIGINT, syscall.SIGTERM)
@@ -38,12 +39,10 @@ func main() {
 	var wg sync.WaitGroup
 	var workers = make(map[string](*Worker))
 
-	config_path := fmt.Sprintf(CONFIG_FILE_PATH, App_name);
-	configs := LoadConfig(config_path)
+	configs := config.LoadConfig(*config_file_path)
 
 	for name, conf := range configs {
-		sig_chan := make(chan os.Signal, 1)
-		workers[name] = newWorker(name, conf, sig_chan)
+		workers[name] = newWorker(name, conf)
 		wg.Add(1)
 		go func(worker *Worker) {
 			defer wg.Done()
@@ -66,9 +65,8 @@ Loop:
 		}
 	}
 
-	//等待协程完成,退出
 	wg.Wait()
-	log.Println("safe exit")
+	log.Println("master done")
 }
 
 //消费消息队列
